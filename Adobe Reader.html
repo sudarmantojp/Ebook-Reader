@@ -6,21 +6,22 @@
   <title>Furigana JSON Viewer</title>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-      overflow-x: hidden;
-      transition: background 0.3s;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #f5f5f5; padding: 0; 
+      margin: 0; 
+      overflow-x: hidden; 
+      transition: background 0.3s; 
+    }       
+    .container { 
+      width: 100%; 
+      max-width: 900px; 
+      margin: 0 auto; 
+      background: white; 
+      padding: 20px; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+      box-sizing: border-box; 
     }
 
     h1 {
@@ -716,7 +717,45 @@ body.furigana-hidden #verticalInner rt {
   transform: scale(1.02);
   opacity: 0.92;
 }
-
+/* ========================================================= RESPONSIVE LAYOUT ========================================================= */ 
+    /* ── Horizontal mode ── */ 
+    /* Hilangkan margin kiri/kanan agar area membaca lebih lebar */ 
+body:not(.is-vertical) { 
+  padding-left: 0; 
+  padding-right: 0; 
+} 
+body:not(.is-vertical) .container { 
+  width: 100%; 
+  max-width: none; 
+  margin-left: 0; 
+  margin-right: 0; 
+  border-radius: 0; 
+} 
+    /* Output horizontal menggunakan seluruh lebar */ 
+body:not(.is-vertical) #output { 
+  width: 100%; 
+  box-sizing: border-box; 
+} 
+    /* ── Vertical mode ── */ 
+    /* Beri jarak antara tombol Exit Vertical dan area teks */ 
+body.is-vertical #output.vertical { top: 60px; bottom: 70px; } 
+    /* Sesuaikan tinggi verticalInner mengikuti area baru */ 
+body.is-vertical #verticalInner { height: 100%; box-sizing: border-box; } 
+    /* ── Desktop ── */ 
+@media (min-width: 901px) { 
+  body:not(.is-vertical) .container { padding-left: 24px; padding-right: 24px; } 
+} 
+    /* ── Mobile horizontal ── */ 
+@media (max-width: 600px) { 
+  body:not(.is-vertical) .container { padding-left: 10px; padding-right: 10px; } 
+  body:not(.is-vertical) #output { padding-left: 12px; padding-right: 12px; border-left: none; border-right: none; border-radius: 0; } 
+} 
+/* ── Mobile vertical ── */ 
+@media (max-width: 600px) { 
+  body.is-vertical #output.vertical { top: 58px; bottom: 70px; } 
+  body.is-vertical #verticalInner { padding-top: 12px; padding-bottom: 16px; } 
+  #exitVerticalBtn { top: 10px; right: 10px; } 
+}
   </style>
 </head>
 <body>
