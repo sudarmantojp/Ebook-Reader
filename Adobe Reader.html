@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Furigana JSON Viewer</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      overflow-x: hidden;
+      transition: background 0.3s;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* ── Word ── */
+    .word {
+      display: inline;
+      position: relative;
+      cursor: pointer;
+      margin-right: 2px;
+      line-height: 2.8;
+    }
+
+    .word[data-meaning] {
+      text-decoration: underline dotted rgba(0,0,0,0.25);
+      text-underline-offset: 4px;
+    }
+
+    ruby {
+      font-size: 28px;
+    }
+
+    rt {
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* ── Warna teks per tema ── */
+    /* Light (default): teks gelap di latar putih */
+    #output        { color: #1a1a1a; }
+    #output ruby   { color: #1a1a1a; }
+    #output rt     { color: #555; }
+
+    /* Dark: teks terang di latar biru gelap */
+    body.theme-dark #output        { color: #e8eaf6; }
+    body.theme-dark #output ruby   { color: #e8eaf6; }
+    body.theme-dark #output rt     { color: #90caf9; }
+    body.theme-dark #verticalInner { color: #e8eaf6; }
+    body.theme-dark #verticalInner ruby { color: #e8eaf6; }
+    body.theme-dark #verticalInner rt   { color: #90caf9; }
+
+    /* Green: teks hijau gelap di latar hijau muda */
+    body.theme-green #output        { color: #1b5e20; }
+    body.theme-green #output ruby   { color: #1b5e20; }
+    body.theme-green #output rt     { color: #2e7d32; }
+    body.theme-green #verticalInner { color: #1b5e20; }
+    body.theme-green #verticalInner ruby { color: #1b5e20; }
+    body.theme-green #verticalInner rt   { color: #2e7d32; }
+
+    /* Blue: teks biru gelap di latar biru muda */
+    body.theme-blue #output        { color: #0d47a1; }
+    body.theme-blue #output ruby   { color: #0d47a1; }
+    body.theme-blue #output rt     { color: #1976d2; }
+    body.theme-blue #verticalInner { color: #0d47a1; }
+    body.theme-blue #verticalInner ruby { color: #0d47a1; }
+    body.theme-blue #verticalInner rt   { color: #1976d2; }
+
+    /* ── Vertical mode: background per tema ── */
+    /* Vertical default (tidak ada tema): latar putih, teks gelap */
+    body.is-vertical #output.vertical { background: #f5f5f5; color: #1a1a1a; }
+    body.is-vertical #verticalInner   { color: #1a1a1a; }
+    body.is-vertical #verticalInner rt { color: #555; }
+
+    /* Vertical dark: latar biru gelap, teks terang */
+    body.is-vertical.theme-dark #output.vertical { background: #1a1a2e; color: #e8eaf6; }
+    body.is-vertical.theme-dark #verticalInner   { color: #e8eaf6; }
+    body.is-vertical.theme-dark #verticalInner rt { color: #90caf9; }
+
+    /* Vertical green: latar hijau muda, teks hijau gelap */
+    body.is-vertical.theme-green #output.vertical { background: #e8f5e9; color: #1b5e20; }
+    body.is-vertical.theme-green #verticalInner   { color: #1b5e20; }
+    body.is-vertical.theme-green #verticalInner rt { color: #2e7d32; }
+
+    /* Vertical blue: latar biru muda, teks biru gelap */
+    body.is-vertical.theme-blue #output.vertical { background: #e3f2fd; color: #0d47a1; }
+    body.is-vertical.theme-blue #verticalInner   { color: #0d47a1; }
+    body.is-vertical.theme-blue #verticalInner rt { color: #1976d2; }
+
+    /* ── Tooltip (JS-rendered, posisi diatur penuh oleh JS) ── */
+    #js-tooltip {
+      position: fixed;
+      z-index: 9999;
+      /* default: teks putih, latar gelap */
+      background: #222;
+      color: #fff;
+      font-size: 13px;
+      font-family: Arial, sans-serif;
+      font-weight: normal;
+      padding: 6px 14px;
+      border-radius: 8px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      /*
+        PENTING: TIDAK ada transform: translateX(-50%) di sini.
+        Posisi `left` diset JS sebagai TEPI KIRI tooltip.
+        Centering dihitung manual di JS.
+      */
+      transition: opacity 0.15s;
+      opacity: 0;
+    }
+    #js-tooltip.show {
+      opacity: 1;
+    }
+    /* Panah penunjuk di bawah tooltip (default: ke bawah, tooltip di atas kata) */
+    #js-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: var(--arrow-left, 50%);
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: #222;
+    }
+    /* Saat tooltip di bawah kata (kelas .below), panah mengarah ke atas */
+    #js-tooltip.below::after {
+      top: auto;
+      bottom: 100%;
+      border-top-color: transparent;
+      border-bottom-color: #222;
+    }
+
+    /* ── Warna tooltip per tema ── */
+    body.theme-dark  #js-tooltip               { background: #1a237e; color: #e8eaf6; }
+    body.theme-dark  #js-tooltip::after        { border-top-color: #1a237e; }
+    body.theme-dark  #js-tooltip.below::after  { border-top-color: transparent; border-bottom-color: #1a237e; }
+
+    body.theme-green #js-tooltip               { background: #1b5e20; color: #f1fdf2; }
+    body.theme-green #js-tooltip::after        { border-top-color: #1b5e20; }
+    body.theme-green #js-tooltip.below::after  { border-top-color: transparent; border-bottom-color: #1b5e20; }
+
+    body.theme-blue  #js-tooltip               { background: #0d47a1; color: #e3f2fd; }
+    body.theme-blue  #js-tooltip::after        { border-top-color: #0d47a1; }
+    body.theme-blue  #js-tooltip.below::after  { border-top-color: transparent; border-bottom-color: #0d47a1; }
+
+    /* ── Slide-in JSON panel ── */
+    #jsonPanel {
+      width: 340px;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: -360px;
+      background: linear-gradient(180deg, #1e1e1e, #111);
+      z-index: 6000;
+      transition: left 0.35s ease;
+      box-sizing: border-box;
+      padding: 16px;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.25);
+      border-top-right-radius: 22px;
+      border-bottom-right-radius: 22px;
+      overflow-y: auto;
+    }
+
+    #jsonPanel::before {
+      content: '📚 JSON Reader Menu';
+      display: block;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 14px;
+    }
+
+    #jsonPanel.open {
+      left: 0;
+    }
+
+    /* ── Panel buttons / controls ── */
+    #closeMenu {
+      margin-bottom: 14px;
+      padding: 12px 18px;
+      border: none;
+      border-radius: 14px;
+      background: #ff5757;
+      color: white;
+      cursor: pointer;
+      font-size: 15px;
+      width: 100%;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+
+    #closeMenu:hover {
+      transform: scale(1.02);
+    }
+
+    #jsonPanel select {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: none;
+      background: #333;
+      color: white;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    #jsonPanel input[type="file"] {
+      color: #aaa;
+      font-size: 13px;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    #renderBtn {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 12px 18px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #00c853, #007e33);
+      color: white;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: bold;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    #renderBtn:hover {
+      transform: scale(1.02);
+      opacity: 0.92;
+    }
+
+    textarea {
+      width: 100%;
+      height: calc(100vh - 330px);
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid #333;
+      font-size: 13px;
+      font-family: monospace;
+      background: #0d0d0d;
+      color: #00ff90;
+      overflow-y: auto;
+      resize: none;
+      box-sizing: border-box;
+      line-height: 1.6;
+    }
+
+    /* ── Top bar (hamburger) ── */
+    .top-bar {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 5000;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .menu-toggle {
+      padding: 12px 20px;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, #222, #444);
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+
+    .menu-toggle:hover {
+      transform: scale(1.03);
+    }
+
+    /* ── Output area ── */
+    #output {
+      margin-top: 80px;
+      font-size: 30px;
+      line-height: 2.5;
+      color: #222;
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      border: 1px solid #eee;
+      min-height: 200px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /* ── Themes ── */
+    body.theme-dark {
+      background: #1a1a2e;
+    }
+    body.theme-dark .container {
+      background: #16213e;
+    }
+    body.theme-dark #output {
+      background: #0f3460;
+      border-color: #1a4a7a;
+    }
+    body.theme-dark h1 {
+      color: #e8eaf6;
+    }
+
+    body.theme-green {
+      background: #e8f5e9;
+    }
+    body.theme-green .container {
+      background: #f1fdf2;
+    }
+    body.theme-green #output {
+      background: #f9fff9;
+      border-color: #a5d6a7;
+    }
+
+    body.theme-blue {
+      background: #e3f2fd;
+    }
+    body.theme-blue .container {
+      background: #f0f8ff;
+    }
+    body.theme-blue #output {
+      background: #f5faff;
+      border-color: #90caf9;
+    }
+
+    /* ── Vertical (tategumi) mode ── */
+
+    /* Saat vertical aktif, output keluar dari flow normal */
+    body.is-vertical {
+      overflow: hidden;
+    }
+
+    body.is-vertical .container {
+      /* sembunyikan container biasa, output jadi fullscreen */
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      max-width: 100%;
+    }
+
+    body.is-vertical h1 {
+      display: none;
+    }
+
+    /*
+      #output.vertical = fixed viewport scroll-container (overflow-x).
+      CSS multi-column TIDAK bekerja pada elemen position:fixed,
+      sehingga konten dimasukkan ke #verticalInner di dalamnya.
+    */
+    #output.vertical {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      bottom: 70px;               /* sisakan ruang pagination bar */
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: inherit;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      z-index: 100;
+    }
+
+    /*
+      #verticalInner = element yang benar-benar menampilkan teks
+      dalam format tategumi multi-kolom.
+
+      Cara kerja:
+        writing-mode: vertical-rl   → karakter mengalir ATAS ke BAWAH
+        columns: N                  → N kolom sejajar, kolom baru ke KIRI
+        column-fill: auto           → isi dari atas dulu, baru kolom berikutnya
+        height: 100%                → setinggi area scroll (#output.vertical)
+
+      Hasil: teks mengisi kolom 1 (kanan) dari atas ke bawah,
+             lalu lanjut ke kolom 2 (lebih kiri), dst.
+             Scroll horizontal kiri→kanan = membaca dari kanan ke kiri.
+    */
+    #verticalInner {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+
+      display: block;
+      height: 100%;               /* penuh wrapper */
+      box-sizing: border-box;
+      padding: 56px 28px 16px 28px;
+
+      /* jumlah kolom dikontrol JS via style.columns */
+      columns: var(--vert-cols, 3);
+      column-gap: 24px;
+      column-fill: auto;
+
+      white-space: normal;
+      word-break: keep-all;
+      line-height: 2.6;
+    }
+
+    /* setiap kata tidak boleh terpotong antar kolom */
+    #verticalInner .word {
+      display: inline-block;
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      margin: 0 1px;
+    }
+
+    /* furigana di kanan karakter (standar tategumi) */
+    #verticalInner ruby {
+      ruby-position: right;
+    }
+
+    #verticalInner rt {
+      font-size: 10px;
+    }
+
+    /* underline dotted untuk kata ber-makna di vertical juga */
+    #verticalInner .word[data-meaning] {
+      text-decoration: underline dotted rgba(0,0,0,0.30);
+      text-underline-offset: 3px;
+    }
+    /* di dark/blue theme garis underline memakai warna terang */
+    body.theme-dark  #verticalInner .word[data-meaning] { text-decoration-color: rgba(255,255,255,0.35); }
+    body.theme-dark  #output .word[data-meaning]        { text-decoration-color: rgba(255,255,255,0.35); }
+
+    /* tombol exit vertical */
+    #exitVerticalBtn {
+      display: none;
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 7000;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 12px;
+      background: #ff5757;
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+
+    #exitVerticalBtn:hover {
+      transform: scale(1.04);
+    }
+
+    /* scroll hint bar — muncul di atas pagination bar */
+    #verticalScrollHint {
+      display: none;
+      position: fixed;
+      bottom: 80px;          /* di atas #verticalPagBar */
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 7100;
+      background: rgba(0,0,0,0.55);
+      color: white;
+      font-size: 13px;
+      padding: 6px 18px;
+      border-radius: 20px;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 1s;
+    }
+
+    /* ── Pagination ── */
+    #paginationBar {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 24px;
+      padding: 14px 10px;
+      background: white;
+      border-radius: 14px;
+      border: 1px solid #eee;
+      transition: background 0.3s;
+    }
+
+    #paginationBar.visible {
+      display: flex;
+    }
+
+    body.is-vertical #paginationBar {
+      display: none !important;
+    }
+
+    .pg-btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 10px;
+      background: #222;
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      min-width: 38px;
+    }
+
+    .pg-btn:hover:not(:disabled) {
+      background: #444;
+      transform: scale(1.05);
+    }
+
+    .pg-btn:disabled {
+      background: #ccc;
+      color: #888;
+      cursor: default;
+      transform: none;
+    }
+
+    .pg-btn.active {
+      background: #4a90e2;
+      color: white;
+      box-shadow: 0 2px 8px rgba(74,144,226,0.4);
+    }
+
+    .pg-ellipsis {
+      color: #888;
+      font-size: 15px;
+      padding: 0 4px;
+      line-height: 38px;
+    }
+
+    #pgInfo {
+      font-size: 13px;
+      color: #888;
+      white-space: nowrap;
+    }
+
+    #pgJumpWrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #pgJumpWrap label {
+      font-size: 13px;
+      color: #888;
+    }
+
+    #pgJumpInput {
+      width: 52px;
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    #pgJumpInput:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+
+    /* Themes → pagination */
+    body.theme-dark #paginationBar {
+      background: #0f3460;
+      border-color: #1a4a7a;
+    }
+    body.theme-dark .pg-btn {
+      background: #1a4a7a;
+    }
+    body.theme-dark .pg-btn:hover:not(:disabled) {
+      background: #2a5a9a;
+    }
+    body.theme-dark .pg-ellipsis,
+    body.theme-dark #pgInfo,
+    body.theme-dark #pgJumpWrap label {
+      color: #aacce8;
+    }
+    body.theme-dark #pgJumpInput {
+      background: #16213e;
+      border-color: #2a5a9a;
+      color: #e0e0e0;
+    }
+
+    body.theme-green #paginationBar {
+      background: #f9fff9;
+      border-color: #a5d6a7;
+    }
+    body.theme-green .pg-btn {
+      background: #388e3c;
+    }
+    body.theme-green .pg-btn:hover:not(:disabled) {
+      background: #2e7d32;
+    }
+    body.theme-green .pg-btn.active {
+      background: #1b5e20;
+    }
+
+    body.theme-blue #paginationBar {
+      background: #f5faff;
+      border-color: #90caf9;
+    }
+    body.theme-blue .pg-btn {
+      background: #1565c0;
+    }
+    body.theme-blue .pg-btn:hover:not(:disabled) {
+      background: #0d47a1;
+    }
+    body.theme-blue .pg-btn.active {
+      background: #0a2c6e;
+    }
+
+    /* Vertical pagination bar — strip penuh di bawah layar, DI LUAR area #output */
+    #verticalPagBar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 70px;
+      z-index: 7000;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(20,20,20,0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+      padding: 0 20px;
+      box-sizing: border-box;
+    }
+
+    body.is-vertical #verticalPagBar {
+      display: flex;
+    }
+
+    .vpg-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.15);
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+
+    .vpg-btn:hover:not(:disabled) {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+
+    .vpg-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+      transform: none;
+    }
+
+    #vpgInfo {
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    /* ── Overlay (klik luar untuk tutup panel) ── */
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 5500;
+    }
+
+    #overlay.show {
+      display: block;
+    }
+  
+/* ── Added feature: Show / Hide Furigana ── */
+body.furigana-hidden #output rt,
+body.furigana-hidden #verticalInner rt {
+  display: none !important;
+}
+
+#furiganaToggleBtn {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #7b1fa2, #4a148c);
+  color: white;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: bold;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+#furiganaToggleBtn:hover {
+  transform: scale(1.02);
+  opacity: 0.92;
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- Overlay klik-luar -->
+  <div id="overlay"></div>
+
+  <!-- JS Tooltip (satu element, dipakai ulang) -->
+  <div id="js-tooltip"></div>
+
+  <!-- Slide-in panel -->
+  <div id="jsonPanel">
+    <button type="button" id="closeMenu">✕ Close</button>
+
+    <label style="color:#aaa; font-size:13px; display:block; margin-bottom:4px;">🎨 Theme</label>
+    <select id="themeSelect">
+      <option value="light">Light (Default)</option>
+      <option value="dark">Dark</option>
+      <option value="green">Green</option>
+      <option value="blue">Blue</option>
+    </select>
+
+    <label style="color:#aaa; font-size:13px; display:block; margin-bottom:4px;">📄 Kata per Halaman</label>
+    <select id="perPageSelect">
+      <option value="20">20 kata</option>
+      <option value="50" selected>50 kata</option>
+      <option value="100">100 kata</option>
+      <option value="200">200 kata</option>
+      <option value="0">Semua (tanpa halaman)</option>
+    </select>
+
+    <label style="color:#aaa; font-size:13px; display:block; margin-bottom:4px;">📐 Layout</label>
+    <select id="layoutSelect">
+      <option value="horizontal">Horizontal</option>
+      <option value="vertical">Vertical Japanese</option>
+    </select>
+
+
+    <!-- Added: Show / Hide Furigana -->
+    <label style="color:#aaa; font-size:13px; display:block; margin-bottom:6px;">🔤 Furigana</label>
+    <button type="button" id="furiganaToggleBtn">👁️ Hide Furigana</button>
+
+    <div id="verticalOptions" style="display:none;">
+      <label style="color:#aaa; font-size:13px; display:block; margin-bottom:4px;">📊 Jumlah Kolom</label>
+      <select id="colCountSelect">
+        <option value="1">1 kolom</option>
+        <option value="2">2 kolom</option>
+        <option value="3" selected>3 kolom</option>
+        <option value="4">4 kolom</option>
+        <option value="5">5 kolom</option>
+      </select>
+    </div>
+
+    <br>
+
+    <label style="color:#aaa; font-size:13px; display:block; margin-bottom:6px;">📂 Upload JSON File</label>
+    <input type="file" id="fileInput" accept=".json" />
+
+    <br>
+
+    <button type="button" id="renderBtn">▶ Render JSON</button>
+
+    <textarea id="jsonInput" placeholder='Paste JSON di sini, contoh:
+[
+  [
+    [["日", "に"], ["本", "ほん"], ["語", "ご"]],
+    "bahasa Jepang"
+  ],
+  [
+    [["私", "わたし"]],
+    "saya"
+  ]
+]'></textarea>
+  </div>
+
+  <!-- Tombol keluar vertical mode -->
+  <button type="button" id="exitVerticalBtn">✕ Keluar Vertical</button>
+  <div id="verticalScrollHint">← Geser / scroll untuk membaca →</div>
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <button type="button" class="menu-toggle" id="menuButton">☰ Menu</button>
+  </div>
+
+  <!-- Vertical pagination bar -->
+  <nav id="verticalPagBar" aria-label="Vertical pagination">
+    <button class="vpg-btn" id="vpgFirst" title="Halaman pertama">⏮</button>
+    <button class="vpg-btn" id="vpgPrev"  title="Halaman sebelumnya">◀</button>
+    <span id="vpgInfo">1 / 1</span>
+    <button class="vpg-btn" id="vpgNext"  title="Halaman berikutnya">▶</button>
+    <button class="vpg-btn" id="vpgLast"  title="Halaman terakhir">⏭</button>
+  </nav>
+
+  <!-- Main content -->
+  <div class="container">
+    <h1>📖 Furigana JSON Viewer</h1>
+    <div id="output">
+      <p style="color:#aaa; font-size:16px; text-align:center; margin-top:40px;">
+        Buka <strong>☰ Menu</strong>, paste JSON atau upload file, lalu klik <strong>▶ Render JSON</strong>.
+      </p>
+    </div>
+
+    <!-- Horizontal pagination bar -->
+    <nav id="paginationBar" aria-label="Pagination"></nav>
+  </div>
+
+  <script>
+    /* ─────────────────────────────────────────
+       JS Tooltip — posisi presisi pakai getBoundingClientRect
+    ───────────────────────────────────────── */
+    const tooltip = document.getElementById('js-tooltip');
+    let   tooltipTimer = null;
+
+    function showTooltip(el) {
+      const meaning = el.getAttribute('data-meaning');
+      if (!meaning) return;
+
+      tooltip.textContent = meaning;
+      tooltip.classList.remove('show', 'below');
+      // Paksa reflow agar offsetWidth terbaca benar sebelum .show
+      void tooltip.offsetWidth;
+      tooltip.classList.add('show');
+
+      // Hitung posisi setelah teks diisi (agar offsetWidth akurat)
+      requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        const tw   = tooltip.offsetWidth;
+        const th   = tooltip.offsetHeight;
+        const gap  = 10;   // jarak vertikal antara tooltip dan kata
+        const pad  = 8;    // jarak minimum dari tepi layar
+
+        /*
+          Rumus posisi TEPAT CENTER:
+            centerX = rect.left + rect.width / 2     ← pusat horizontal kata
+            left    = centerX - tw / 2               ← tepi kiri tooltip
+
+          TIDAK menggunakan transform: translateX(-50%) di CSS,
+          sehingga perhitungan ini adalah posisi final tanpa offset tambahan.
+        */
+        const centerX = rect.left + rect.width / 2;
+        let left = centerX - tw / 2;
+        let top;
+        let below = false;
+
+        // Coba posisi di ATAS kata
+        top = rect.top - th - gap;
+        if (top < pad) {
+          // Tidak cukup ruang di atas → taruh di BAWAH kata
+          top   = rect.bottom + gap;
+          below = true;
+        }
+
+        // Clamp agar tidak keluar kiri/kanan layar
+        left = Math.max(pad, Math.min(left, window.innerWidth - tw - pad));
+
+        // Sesuaikan posisi panah (::after) agar tetap menunjuk ke tengah kata
+        // left panah relatif terhadap tooltip = (centerX - left) / tw * 100%
+        const arrowPct = ((centerX - left) / tw * 100).toFixed(1);
+        tooltip.style.setProperty('--arrow-left', arrowPct + '%');
+
+        if (below) tooltip.classList.add('below');
+
+        tooltip.style.left = left + 'px';
+        tooltip.style.top  = top  + 'px';
+      });
+    }
+
+    function hideTooltip() {
+      tooltip.classList.remove('show');
+    }
+
+    /* Delegasi event ke document — bekerja untuk elemen yang dibuat dinamis */
+    document.addEventListener('mouseover', function (e) {
+      const word = e.target.closest('.word[data-meaning]');
+      if (word) showTooltip(word);
+    });
+
+    document.addEventListener('mouseout', function (e) {
+      const word = e.target.closest('.word[data-meaning]');
+      if (word) hideTooltip();
+    });
+
+    /* Touch: tap untuk tampilkan, tap lagi atau tap di tempat lain untuk tutup */
+    document.addEventListener('touchstart', function (e) {
+      const word = e.target.closest('.word[data-meaning]');
+      if (word) {
+        e.preventDefault();
+        showTooltip(word);
+        clearTimeout(tooltipTimer);
+        tooltipTimer = setTimeout(hideTooltip, 2500);
+      } else {
+        hideTooltip();
+      }
+    }, { passive: false });
+
+    /* ─────────────────────────────────────────
+       Panel toggle
+    ───────────────────────────────────────── */
+    function openPanel() {
+      document.getElementById('jsonPanel').classList.add('open');
+      document.getElementById('overlay').classList.add('show');
+    }
+
+    function closePanel() {
+      document.getElementById('jsonPanel').classList.remove('open');
+      document.getElementById('overlay').classList.remove('show');
+    }
+
+    document.getElementById('menuButton').addEventListener('click', openPanel);
+    document.getElementById('closeMenu').addEventListener('click', closePanel);
+    document.getElementById('overlay').addEventListener('click', closePanel);
+
+    /* ─────────────────────────────────────────
+       Theme
+    ───────────────────────────────────────── */
+    document.getElementById('themeSelect').addEventListener('change', function () {
+      changeTheme(this.value);
+    });
+
+    function changeTheme(theme) {
+      document.body.classList.remove('theme-dark', 'theme-green', 'theme-blue');
+      if (theme !== 'light') {
+        document.body.classList.add('theme-' + theme);
+      }
+    }
+
+    /* ─────────────────────────────────────────
+       Layout (horizontal / vertical)
+    ───────────────────────────────────────── */
+    document.getElementById('layoutSelect').addEventListener('change', function () {
+      changeTextStyle(this.value);
+    });
+
+    function changeTextStyle(style) {
+      const output  = document.getElementById('output');
+      const exitBtn = document.getElementById('exitVerticalBtn');
+      const hint    = document.getElementById('verticalScrollHint');
+      const vertOpt = document.getElementById('verticalOptions');
+
+      if (style === 'vertical') {
+        output.classList.add('vertical');
+        document.body.classList.add('is-vertical');
+        exitBtn.style.display = 'block';
+        vertOpt.style.display = 'block';
+
+        // Terapkan column-width dari selector
+        applyColWidth();
+
+        // Scroll ke paling kanan (awal baca tategumi)
+        requestAnimationFrame(() => scrollToStart());
+
+        // Hint scroll
+        hint.style.display = 'block';
+        hint.style.opacity = '1';
+        setTimeout(() => {
+          hint.style.opacity = '0';
+          setTimeout(() => { hint.style.display = 'none'; }, 1000);
+        }, 3000);
+
+        enableVerticalSwipe(output);
+        enableArrowScroll(output);
+
+      } else {
+        exitVerticalMode();
+      }
+    }
+
+    function exitVerticalMode() {
+      const output  = document.getElementById('output');
+      const exitBtn = document.getElementById('exitVerticalBtn');
+      const vertOpt = document.getElementById('verticalOptions');
+      output.classList.remove('vertical');
+      document.body.classList.remove('is-vertical');
+      exitBtn.style.display = 'none';
+      vertOpt.style.display = 'none';
+      document.getElementById('layoutSelect').value = 'horizontal';
+    }
+
+    document.getElementById('exitVerticalBtn').addEventListener('click', exitVerticalMode);
+
+    /* ── Terapkan jumlah kolom ke #verticalInner ── */
+    function applyColWidth() {
+      const n     = parseInt(document.getElementById('colCountSelect').value) || 3;
+      const inner = document.getElementById('verticalInner');
+      if (!inner) return;
+      inner.style.columns    = String(n);
+      inner.style.columnFill = 'auto';
+    }
+
+    document.getElementById('colCountSelect').addEventListener('change', function () {
+      applyColWidth();
+      requestAnimationFrame(() => scrollToStart());
+    });
+
+    /* scroll ke kolom pertama (paling kanan) */
+    function scrollToStart() {
+      const output = document.getElementById('output');
+      if (output.classList.contains('vertical')) {
+        output.scrollLeft = output.scrollWidth;
+      }
+    }
+
+    /* ── Swipe kiri/kanan untuk touch device ── */
+    function enableVerticalSwipe(el) {
+      if (el.dataset.swipeEnabled) return;
+      el.dataset.swipeEnabled = 'true';
+
+      let startX = 0, startScrollLeft = 0;
+
+      el.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startScrollLeft = el.scrollLeft;
+      }, { passive: true });
+
+      el.addEventListener('touchmove', (e) => {
+        const dx = startX - e.touches[0].clientX;
+        el.scrollLeft = startScrollLeft + dx;
+      }, { passive: true });
+    }
+
+    /* ── Tombol panah keyboard ── */
+    function enableArrowScroll(el) {
+      if (el.dataset.arrowEnabled) return;
+      el.dataset.arrowEnabled = 'true';
+
+      document.addEventListener('keydown', (e) => {
+        if (!el.classList.contains('vertical')) return;
+        // satu "halaman" layar = lebar viewport
+        const step = el.clientWidth * 0.85;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          el.scrollBy({ left: -step, behavior: 'smooth' }); // maju baca (ke kiri)
+        }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          el.scrollBy({ left: step, behavior: 'smooth' });  // mundur
+        }
+      });
+    }
+
+    /* ─────────────────────────────────────────
+       Ruby helper
+    ───────────────────────────────────────── */
+    function createRuby(char, furigana) {
+      if (!furigana) return char;
+      return `<ruby>${char}<rt>${furigana}</rt></ruby>`;
+    }
+
+    /* ─────────────────────────────────────────
+       Pagination state
+    ───────────────────────────────────────── */
+    let allData    = [];   // semua item hasil parse
+    let currentPage = 1;
+    let wordsPerPage = 50;
+
+    function totalPages() {
+      if (wordsPerPage === 0) return 1;
+      return Math.max(1, Math.ceil(allData.length / wordsPerPage));
+    }
+
+    function getPageData(page) {
+      if (wordsPerPage === 0) return allData;
+      const start = (page - 1) * wordsPerPage;
+      return allData.slice(start, start + wordsPerPage);
+    }
+
+    /* ─────────────────────────────────────────
+       Render satu halaman ke #output
+    ───────────────────────────────────────── */
+    function renderPage(page) {
+      currentPage = Math.min(Math.max(1, page), totalPages());
+      const output = document.getElementById('output');
+      const isVert = output.classList.contains('vertical');
+
+      // Bersihkan output
+      output.innerHTML = '';
+
+      const items = getPageData(currentPage);
+
+      if (isVert) {
+        /*
+          Mode vertical: bungkus semua kata dalam #verticalInner
+          supaya CSS columns bisa bekerja (columns tidak bekerja
+          langsung pada elemen position:fixed).
+        */
+        const inner = document.createElement('div');
+        inner.id = 'verticalInner';
+
+        items.forEach(item => {
+          const chars   = item[0];
+          const meaning = item.length > 1 ? item[1] : '';
+
+          const wordSpan = document.createElement('span');
+          wordSpan.className = 'word';
+
+          let rubyHTML = '';
+          chars.forEach(pair => {
+            rubyHTML += createRuby(pair[0], pair[1] || '');
+          });
+          wordSpan.innerHTML = rubyHTML;
+
+          const cleanMeaning = String(meaning || '').trim();
+          if (cleanMeaning !== '') wordSpan.setAttribute('data-meaning', cleanMeaning);
+
+          inner.appendChild(wordSpan);
+          inner.appendChild(document.createTextNode('　')); // spasi ideografik Jepang
+        });
+
+        output.appendChild(inner);
+
+        // Terapkan lebar kolom lalu scroll ke kolom pertama (kanan)
+        requestAnimationFrame(() => {
+          applyColWidth();
+          output.scrollLeft = output.scrollWidth;
+        });
+
+      } else {
+        // Mode horizontal biasa
+        items.forEach(item => {
+          const chars   = item[0];
+          const meaning = item.length > 1 ? item[1] : '';
+
+          const wordSpan = document.createElement('span');
+          wordSpan.className = 'word';
+
+          let rubyHTML = '';
+          chars.forEach(pair => {
+            rubyHTML += createRuby(pair[0], pair[1] || '');
+          });
+          wordSpan.innerHTML = rubyHTML;
+
+          const cleanMeaning = String(meaning || '').trim();
+          if (cleanMeaning !== '') wordSpan.setAttribute('data-meaning', cleanMeaning);
+
+          output.appendChild(wordSpan);
+          output.appendChild(document.createTextNode(' '));
+        });
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      updatePaginationUI();
+    }
+
+    /* ─────────────────────────────────────────
+       Build pagination UI (horizontal bar)
+    ───────────────────────────────────────── */
+    function updatePaginationUI() {
+      const tp  = totalPages();
+      const cp  = currentPage;
+      const bar = document.getElementById('paginationBar');
+
+      // Sembunyikan bar kalau hanya 1 halaman
+      if (tp <= 1) {
+        bar.classList.remove('visible');
+        updateVerticalPagUI();
+        return;
+      }
+
+      bar.classList.add('visible');
+      bar.innerHTML = '';
+
+      /* ── helper buat tombol ── */
+      function makeBtn(label, page, extraClass = '') {
+        const btn = document.createElement('button');
+        btn.className = 'pg-btn' + (extraClass ? ' ' + extraClass : '');
+        btn.textContent = label;
+        if (page === null) {
+          btn.disabled = true;
+        } else {
+          btn.addEventListener('click', () => renderPage(page));
+        }
+        return btn;
+      }
+
+      // ⏮ First  ◀ Prev
+      bar.appendChild(makeBtn('⏮', cp > 1 ? 1 : null));
+      bar.appendChild(makeBtn('◀ Prev', cp > 1 ? cp - 1 : null));
+
+      /* ── nomor halaman dengan ellipsis ── */
+      const pages = buildPageNumbers(cp, tp);
+      pages.forEach(p => {
+        if (p === '…') {
+          const el = document.createElement('span');
+          el.className = 'pg-ellipsis';
+          el.textContent = '…';
+          bar.appendChild(el);
+        } else {
+          const btn = makeBtn(String(p), p, p === cp ? 'active' : '');
+          if (p === cp) btn.disabled = true;
+          bar.appendChild(btn);
+        }
+      });
+
+      // Next ▶  Last ⏭
+      bar.appendChild(makeBtn('Next ▶', cp < tp ? cp + 1 : null));
+      bar.appendChild(makeBtn('⏭', cp < tp ? tp : null));
+
+      // Info + jump
+      const info = document.createElement('span');
+      info.id = 'pgInfo';
+      info.textContent = `${cp} / ${tp} halaman  (${allData.length} kata)`;
+      bar.appendChild(info);
+
+      // Jump-to-page
+      if (tp > 5) {
+        const wrap  = document.createElement('div');
+        wrap.id = 'pgJumpWrap';
+        wrap.innerHTML = `<label for="pgJumpInput">Ke halaman</label>
+          <input id="pgJumpInput" type="number" min="1" max="${tp}" value="${cp}" />`;
+        bar.appendChild(wrap);
+
+        wrap.querySelector('#pgJumpInput').addEventListener('change', function () {
+          const v = parseInt(this.value);
+          if (v >= 1 && v <= tp) renderPage(v);
+          else this.value = cp;
+        });
+      }
+
+      updateVerticalPagUI();
+    }
+
+    /* Buat array nomor halaman dengan ellipsis */
+    function buildPageNumbers(cp, tp) {
+      if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+      const pages = [];
+      pages.push(1);
+      if (cp > 3)           pages.push('…');
+      for (let i = Math.max(2, cp - 1); i <= Math.min(tp - 1, cp + 1); i++) pages.push(i);
+      if (cp < tp - 2)      pages.push('…');
+      pages.push(tp);
+      return pages;
+    }
+
+    /* ─────────────────────────────────────────
+       Vertical pagination bar
+    ───────────────────────────────────────── */
+    function updateVerticalPagUI() {
+      const tp = totalPages();
+      document.getElementById('vpgInfo').textContent  = `${currentPage} / ${tp}`;
+      document.getElementById('vpgFirst').disabled = currentPage <= 1;
+      document.getElementById('vpgPrev').disabled  = currentPage <= 1;
+      document.getElementById('vpgNext').disabled  = currentPage >= tp;
+      document.getElementById('vpgLast').disabled  = currentPage >= tp;
+    }
+
+    document.getElementById('vpgFirst').addEventListener('click', () => renderPage(1));
+    document.getElementById('vpgPrev') .addEventListener('click', () => renderPage(currentPage - 1));
+    document.getElementById('vpgNext') .addEventListener('click', () => renderPage(currentPage + 1));
+    document.getElementById('vpgLast') .addEventListener('click', () => renderPage(totalPages()));
+
+    /* ─────────────────────────────────────────
+       Words-per-page selector
+    ───────────────────────────────────────── */
+    document.getElementById('perPageSelect').addEventListener('change', function () {
+      wordsPerPage = parseInt(this.value);
+      currentPage  = 1;
+      renderPage(1);
+    });
+
+    /* ─────────────────────────────────────────
+       Render JSON → simpan allData → halaman 1
+    ───────────────────────────────────────── */
+    function renderJSON() {
+      const output = document.getElementById('output');
+      const input  = document.getElementById('jsonInput').value.trim();
+
+      output.innerHTML = '';
+      document.getElementById('paginationBar').classList.remove('visible');
+      allData = [];
+
+      if (!input) {
+        output.innerHTML = '<p style="color:#aaa; font-size:16px; text-align:center;">JSON kosong. Paste atau upload file JSON terlebih dahulu.</p>';
+        return;
+      }
+
+      try {
+        const data = JSON.parse(input);
+
+        if (!Array.isArray(data) || data.length === 0) {
+          throw new Error('Data harus berupa array yang tidak kosong.');
+        }
+
+        allData      = data;
+        currentPage  = 1;
+        wordsPerPage = parseInt(document.getElementById('perPageSelect').value);
+        renderPage(1);
+
+      } catch (err) {
+        output.innerHTML = `<p style="color:red; font-size:15px;">⚠️ JSON Error: ${err.message}</p>`;
+      }
+    }
+
+    /* ─────────────────────────────────────────
+       Tombol Render
+    ───────────────────────────────────────── */
+    document.getElementById('renderBtn').addEventListener('click', renderJSON);
+
+    /* ─────────────────────────────────────────
+       Upload file JSON
+    ───────────────────────────────────────── */
+    document.getElementById('fileInput').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        document.getElementById('jsonInput').value = ev.target.result;
+        renderJSON();
+      };
+      reader.readAsText(file);
+    });
+  
+    /* ─────────────────────────────────────────
+       Added feature: Show / Hide Furigana
+       Tidak mengubah fungsi render yang sudah ada.
+       Cukup menambah class pada <body>, sehingga
+       furigana tetap ada di DOM dan dapat ditampilkan
+       kembali tanpa merender ulang JSON.
+    ───────────────────────────────────────── */
+    (function () {
+      const furiganaBtn = document.getElementById('furiganaToggleBtn');
+
+      function updateFuriganaButton() {
+        const hidden = document.body.classList.contains('furigana-hidden');
+        furiganaBtn.textContent = hidden
+          ? '👁️‍🗨️ Show Furigana'
+          : '👁️ Hide Furigana';
+        furiganaBtn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        furiganaBtn.title = hidden
+          ? 'Tampilkan furigana'
+          : 'Sembunyikan furigana';
+      }
+
+      furiganaBtn.addEventListener('click', function () {
+        document.body.classList.toggle('furigana-hidden');
+        updateFuriganaButton();
+      });
+
+      updateFuriganaButton();
+    })();
+
+  </script>
+
+</body>
+</html>
